@@ -17,6 +17,9 @@ CSV_NAME=""
 OUT_CONTRASTIVE="artifacts/contrastive-data"
 OUT_MODEL="artifacts/model"
 BASE_MODEL="sentence-transformers/all-MiniLM-L6-v2"
+HF_REPO_ID=""
+HF_COMMIT_MESSAGE="Publish sentence-transformer artifact"
+HF_TOKEN="${HF_TOKEN:-}"
 
 EPOCHS=2
 BATCH_SIZE=64
@@ -33,6 +36,10 @@ SEED=17
 SKIP_INSTALL=0
 SKIP_TRAIN=0
 RUN_RUST_EXAMPLE=0
+PUBLISH_HF=0
+HF_PRIVATE=0
+HF_CREATE_PR=0
+HF_REPLACE_ROOT=0
 DRY_RUN=0
 EXAMPLE_TEXT="A quick test sentence for semantic embeddings."
 
@@ -52,6 +59,13 @@ Options:
   --out-contrastive DIR      Output dir for prepared contrastive data
   --out-model DIR            Output dir for trained + exported model
   --base-model MODEL         Base sentence-transformers model
+  --publish-hf               Publish sentence-transformer artifact to Hugging Face
+  --hf-repo-id ID            HF target model repo id (required with --publish-hf)
+  --hf-token TOKEN           HF token (default: HF_TOKEN env var)
+  --hf-private               Create repo as private if it does not exist
+  --hf-create-pr             Upload as pull request instead of direct commit
+  --hf-replace-root          Replace repo root contents on upload
+  --hf-commit-message TEXT   Commit message for HF upload
   --epochs N                 Training epochs (default: 2)
   --batch-size N             Training batch size (default: 64)
   --learning-rate F          Rust trainer learning rate (default: 0.06)
@@ -72,6 +86,7 @@ Options:
 
 Environment:
   PYTHON_BIN                 Python executable to use (default: python3)
+  HF_TOKEN                   Hugging Face token used for --publish-hf uploads
 EOF
 }
 
@@ -122,6 +137,34 @@ while [[ $# -gt 0 ]]; do
       ;;
     --base-model)
       BASE_MODEL="$2"
+      shift 2
+      ;;
+    --publish-hf)
+      PUBLISH_HF=1
+      shift
+      ;;
+    --hf-repo-id)
+      HF_REPO_ID="$2"
+      shift 2
+      ;;
+    --hf-token)
+      HF_TOKEN="$2"
+      shift 2
+      ;;
+    --hf-private)
+      HF_PRIVATE=1
+      shift
+      ;;
+    --hf-create-pr)
+      HF_CREATE_PR=1
+      shift
+      ;;
+    --hf-replace-root)
+      HF_REPLACE_ROOT=1
+      shift
+      ;;
+    --hf-commit-message)
+      HF_COMMIT_MESSAGE="$2"
       shift 2
       ;;
     --epochs)
@@ -201,7 +244,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 NEEDS_PYTHON=0
-if [[ "$PREP_BACKEND" == "python" || "$TRAIN_BACKEND" == "python" ]]; then
+if [[ "$PREP_BACKEND" == "python" || "$TRAIN_BACKEND" == "python" || "$PUBLISH_HF" -eq 1 ]]; then
   NEEDS_PYTHON=1
 fi
 
@@ -299,6 +342,39 @@ if [[ "$TRAIN_BACKEND" == "python" ]]; then
     --normalize
 fi
 
+if [[ "$PUBLISH_HF" -eq 1 ]]; then
+  if [[ -z "$HF_REPO_ID" ]]; then
+    echo "--hf-repo-id is required when --publish-hf is set." >&2
+    exit 1
+  fi
+  if [[ ! -d "$OUT_MODEL/sentence-transformer" ]]; then
+    echo "Missing sentence-transformer directory: $OUT_MODEL/sentence-transformer" >&2
+    echo "Use --train-backend python or point --out-model to an existing sentence-transformer export." >&2
+    exit 1
+  fi
+
+  publish_cmd=(
+    python3 training/publish_sentence_transformer.py
+    --sentence-model-dir "$OUT_MODEL/sentence-transformer"
+    --repo-id "$HF_REPO_ID"
+    --commit-message "$HF_COMMIT_MESSAGE"
+  )
+  if [[ -n "$HF_TOKEN" ]]; then
+    export HF_TOKEN
+  fi
+  if [[ "$HF_PRIVATE" -eq 1 ]]; then
+    publish_cmd+=(--private)
+  fi
+  if [[ "$HF_CREATE_PR" -eq 1 ]]; then
+    publish_cmd+=(--create-pr)
+  fi
+  if [[ "$HF_REPLACE_ROOT" -eq 1 ]]; then
+    publish_cmd+=(--replace-root)
+  fi
+
+  run_cmd "${publish_cmd[@]}"
+fi
+
 if [[ "$RUN_RUST_EXAMPLE" -eq 1 ]]; then
   if [[ "$TRAIN_BACKEND" == "rust" ]]; then
     run_cmd cargo run --example rust_embed -- \
@@ -319,4 +395,7 @@ if [[ "$TRAIN_BACKEND" == "rust" ]]; then
 else
   echo "Sentence model:   $OUT_MODEL/sentence-transformer"
   echo "ONNX export:      $OUT_MODEL/onnx"
+fi
+if [[ "$PUBLISH_HF" -eq 1 ]]; then
+  echo "Published repo:   $HF_REPO_ID"
 fi

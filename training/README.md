@@ -5,7 +5,9 @@ This pipeline replaces the hash baseline with a learned local embedder:
 1. Ingest + clean Kaggle pairs with `polars` (Rust CLI by default)
 2. Build contrastive train/eval sets with negative sampling
 3. Train a local Rust contrastive embedder (default) or Python sentence-transformers fallback
-4. Run native Rust inference directly from saved local weights
+4. Export ONNX runtime assets (Python sentence-transformers path)
+5. Optionally publish a SentenceTransformer package to Hugging Face Hub
+6. Run native Rust inference directly from saved local weights
 
 ## One-command run
 
@@ -30,6 +32,12 @@ Useful variants:
 
 # Skip dependency install and training (export only from existing model dir).
 ./training/run_pipeline.sh --skip-install --skip-train
+
+# Train Python backend and publish SentenceTransformer package to HF.
+./training/run_pipeline.sh \
+  --train-backend python \
+  --publish-hf \
+  --hf-repo-id your-user/auto-g-embed-st
 
 # Show commands only.
 ./training/run_pipeline.sh --dry-run
@@ -140,7 +148,32 @@ Outputs:
 - `artifacts/model/onnx/tokenizer.json`
 - `artifacts/model/onnx/embedder_config.json`
 
-## 5) Run native Rust embedding inference
+## 5) Publish SentenceTransformer package to Hugging Face
+
+```bash
+python3 training/publish_sentence_transformer.py \
+  --sentence-model-dir artifacts/model/sentence-transformer \
+  --repo-id your-user/auto-g-embed-st \
+  --commit-message "Publish sentence-transformer artifact"
+```
+
+Optional flags:
+
+- `--token <HF_TOKEN>`: explicit token (otherwise uses CLI auth / `HF_TOKEN`).
+- `--private`: create repo as private (if repo does not already exist).
+- `--create-pr`: upload via PR instead of direct commit.
+- `--replace-root`: replace root files in the target repo.
+
+Pipeline shortcut:
+
+```bash
+./training/run_pipeline.sh \
+  --train-backend python \
+  --publish-hf \
+  --hf-repo-id your-user/auto-g-embed-st
+```
+
+## 6) Run native Rust embedding inference
 
 ```bash
 cargo run --example rust_embed -- \

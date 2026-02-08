@@ -18,6 +18,7 @@ Local semantic embedding pipeline with a Rust-native runtime.
 - Rust-native embedder training (`train_rust_embedder`)
 - Runtime embedding APIs and examples
 - Optional ONNX/SentenceTransformer path in `training/`
+- SentenceTransformer publish tooling for Hugging Face (`training/publish_sentence_transformer.py`)
 
 ## Quick start
 
@@ -42,6 +43,15 @@ cargo run --example rust_embed -- \
 Published model artifacts are available on Hugging Face:
 
 - https://huggingface.co/geoffsee/auto-g-embed
+
+To publish a SentenceTransformer-formatted repo for direct MTEB/SBERT loading:
+
+```bash
+./training/run_pipeline.sh \
+  --train-backend python \
+  --publish-hf \
+  --hf-repo-id your-user/auto-g-embed-st
+```
 
 ## Project layout
 
