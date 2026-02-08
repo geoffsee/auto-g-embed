@@ -60,6 +60,21 @@ cargo run --release --bin community_benchmark -- \
 The output includes throughput, latency percentiles (`p50/p95/p99`), retrieval quality metrics, and environment metadata for publishing.
 Methodology and reporting guidance: `BENCHMARKS.md`.
 
+Latest Benchmark (M4 Max) (February 8, 2026):
+
+```bash
+cargo run --release --bin community_benchmark -- \
+  --eval-count 500 --warmup-count 100 --query-count 32 \
+  --output artifacts/benchmarks/smoke.json
+```
+
+- `embeds_per_second`: `219595.18`
+- `p50_us`: `3.88`
+- `p95_us`: `6.54`
+- `p99_us`: `6.71`
+- `top1_accuracy`: `0.9375`
+- `separation`: `0.2886`
+
 ## Additional docs
 
 - Training and pipeline details: `training/README.md`
