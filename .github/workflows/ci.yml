@@ -27,5 +27,11 @@ jobs:
       - name: Lint
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+      - name: Fetch Gutenberg test corpus
+        run: |
+          mkdir -p test-data
+          curl -fsSL -o test-data/pride-and-prejudice.txt \
+            https://www.gutenberg.org/files/1342/1342-0.txt
+
       - name: Test
         run: cargo test

@@ -48,6 +48,18 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
 
+## Community Benchmark
+
+Run the reproducible benchmark CLI:
+
+```bash
+cargo run --release --bin community_benchmark -- \
+  --output artifacts/benchmarks/latest.json
+```
+
+The output includes throughput, latency percentiles (`p50/p95/p99`), retrieval quality metrics, and environment metadata for publishing.
+Methodology and reporting guidance: `BENCHMARKS.md`.
+
 ## Additional docs
 
 - Training and pipeline details: `training/README.md`
