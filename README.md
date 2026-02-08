@@ -1,3 +1,13 @@
+---
+license: mit
+library_name: custom
+pipeline_tag: feature-extraction
+tags:
+  - sentence-embeddings
+  - text-embeddings
+  - rust
+---
+
 # auto-g-embed
 
 Local semantic embedding pipeline with a Rust-native runtime.
@@ -74,6 +84,25 @@ cargo run --release --bin community_benchmark -- \
 - `p99_us`: `6.71`
 - `top1_accuracy`: `0.9375`
 - `separation`: `0.2886`
+
+### Comparison Chart
+
+| Model | embeds_per_second | p50_us | p95_us | p99_us | top1_accuracy | separation |
+|---|---:|---:|---:|---:|---:|---:|
+| auto-g-embed (local smoke run) | 219595.18 | 3.88 | 6.54 | 6.71 | 0.9375 | 0.2886 |
+| Llama-3.2-NV-EmbedQA-1B-v2 | 140.7 | 7000 | 8000 | N/R | N/R | N/R |
+| Llama-3.2-NeMo-Retriever-300M-Embed-V1 | 126.0 | 8000 | 8300 | N/R | N/R | N/R |
+| NV-EmbedQA-E5-v5 | 196.3 | 5100 | 5400 | N/R | N/R | N/R |
+| NV-EmbedQA-Mistral7B-v2 | 67.9 | 14600 | 15400 | N/R | N/R | N/R |
+| SwiftEmbed (paper) | 50000 | 1120 | N/R | N/R | N/R | N/R |
+
+Notes:
+
+- `N/R` means not reported in the source.
+- External numbers are from different hardware and workloads, so this is directional and not an apples-to-apples benchmark.
+- Source links:
+  - NVIDIA NIM performance tables: https://docs.nvidia.com/nim/nemo-retriever/text-embedding/latest/performance.html
+  - SwiftEmbed paper: https://arxiv.org/abs/2510.24793
 
 ## Additional docs
 
