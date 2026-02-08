@@ -1,0 +1,45 @@
+{
+  "profiles": {
+    "quora_pairs": {
+      "kind": "pair_binary_label",
+      "dataset_ref": "quora/question-pairs-dataset",
+      "csv_name": "train.csv",
+      "columns": {
+        "left": "question1",
+        "right": "question2",
+        "label": "is_duplicate"
+      },
+      "filters": {
+        "min_chars": 12,
+        "min_words": 3,
+        "disallow_values": [
+          "removed by reddit",
+          "removed",
+          "deleted"
+        ]
+      },
+      "options": {
+        "positive_label": 1
+      }
+    },
+    "kaggle_questions_million": {
+      "kind": "single_text_duplicate_mining",
+      "dataset_ref": "pavellexyr/one-million-reddit-questions",
+      "csv_name": "one-million-reddit-questions.csv",
+      "columns": {
+        "text": "title"
+      },
+      "filters": {
+        "min_chars": 20,
+        "min_words": 4,
+        "require_question_mark": true,
+        "disallow_values": [
+          "removed by reddit",
+          "removed",
+          "deleted"
+        ]
+      },
+      "options": {}
+    }
+  }
+}

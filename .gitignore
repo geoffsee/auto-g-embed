@@ -1,0 +1,19 @@
+# Rust
+/target/
+
+# Python envs
+.venv/
+.venv_prep/
+
+# Local pipeline outputs
+artifacts/
+checkpoints/
+
+# Local/IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+/data/
+/test-data/*.txt
