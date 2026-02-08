@@ -114,6 +114,40 @@ Notes:
   - NVIDIA NIM performance tables: https://docs.nvidia.com/nim/nemo-retriever/text-embedding/latest/performance.html
   - SwiftEmbed paper: https://arxiv.org/abs/2510.24793
 
+## MTEB Results
+
+Latest MTEB run (Hugging Face Job, `cpu-upgrade`) (February 8, 2026):
+
+```bash
+hf jobs uv run --with mteb --with sentence-transformers --with torch --with numpy \
+  --flavor cpu-upgrade --timeout 6h --detach scripts/run_real_eval.py \
+  --model geoffsee/auto-g-embed-st --device cpu \
+  --tasks SciFact,NFCorpus,FiQA2018 --batch-size 64 --skip-perf \
+  --mteb-output-dir artifacts/evals/mteb_real --output-json latest.json
+```
+
+- Job: https://huggingface.co/jobs/geoffsee/698915cab6db0e80325e19e8
+- `SciFact` main score: `0.64872`
+- `NFCorpus` main score: `0.31141`
+- `FiQA2018` main score: `0.36869`
+- `avg_main_score` (3-task mean): `0.44294`
+
+### MTEB Comparison Chart
+
+| Run | Runtime | SciFact | NFCorpus | FiQA2018 | avg_main_score |
+|---|---|---:|---:|---:|---:|
+| auto-g-embed (local eval, M4 Max) | `mps` | 0.64872 | 0.31141 | 0.36869 | 0.44294 |
+| auto-g-embed-st (Hugging Face Job) | `cpu` (`cpu-upgrade`) | 0.64872 | 0.31141 | 0.36869 | 0.44294 |
+| sentence-transformers/all-MiniLM-L6-v2 | `cpu/mps` | 0.64508 | 0.31594 | 0.36867 | 0.44323 |
+| BAAI/bge-small-en-v1.5 | `cpu/mps` | 0.71273 | 0.34264 | 0.40343 | 0.48627 |
+| intfloat/e5-small-v2 | `cpu/mps` | 0.68854 | 0.32449 | 0.37434 | 0.46246 |
+
+Notes:
+
+- Local values are from `artifacts/evals/real_eval/latest.json`.
+- HF job used the published model repo `geoffsee/auto-g-embed-st` with the same task set and batch size.
+- Comparable model values are from `mteb/results` on Hugging Face (dataset commit `5a7430bdc3c58b3c8be7e8eed4c7bb990f7d554c`), using each task file's `scores.test[0].main_score`.
+
 ## Additional docs
 
 - Training and pipeline details: `training/README.md`
