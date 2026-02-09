@@ -1,0 +1,9 @@
+{
+  "input": [
+    "the cat sat on the mat",
+    "a feline rested on the rug",
+    "stock prices rose sharply today",
+    "the dog chased the ball"
+  ],
+  "model": "auto-g-embed"
+}

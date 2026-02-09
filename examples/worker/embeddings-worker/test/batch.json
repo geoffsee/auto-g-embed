@@ -1,0 +1,8 @@
+{
+  "input": [
+    "hello world",
+    "rust is fast",
+    "cloudflare edge computing"
+  ],
+  "model": "auto-g-embed"
+}
