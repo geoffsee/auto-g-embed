@@ -10,7 +10,7 @@ tags:
 
 # auto-g-embed
 
-Local semantic embedding pipeline with a Rust-native runtime.
+This is a SentenceTransformer model: essentially a lightly fine-tuned clone of all-MiniLM-L6-v2: it starts directly from MiniLM weights, is trained for only one epoch on ~24k pairs, uses the exact same architecture, tokenizer, pooling, and normalization, and achieves nearly identical MTEB scores (a difference of ~0.0003, which is statistical noise). While the broader project also includes a completely separate, much faster Rust-based embedder, the published and evaluated model is the MiniLM-derived one. As a result, the fine-tuning does not meaningfully alter retrieval performance.
 
 ## What this repo provides
 
