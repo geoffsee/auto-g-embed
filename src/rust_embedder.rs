@@ -186,6 +186,68 @@ impl RustContrastiveEmbedder {
         }
     }
 
+    pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        let config_json = serde_json::to_vec(&self.config)
+            .map_err(|e| format!("failed to serialize config: {e}"))?;
+        let config_len = (config_json.len() as u32).to_le_bytes();
+        let weight_bytes = self.token_embeddings.len() * std::mem::size_of::<f32>();
+
+        let mut buf = Vec::with_capacity(4 + config_json.len() + weight_bytes);
+        buf.extend_from_slice(&config_len);
+        buf.extend_from_slice(&config_json);
+        for value in &self.token_embeddings {
+            buf.extend_from_slice(&value.to_le_bytes());
+        }
+        Ok(buf)
+    }
+
+    pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
+        if data.len() < 4 {
+            return Err("data too short for config length header".to_string());
+        }
+        let config_len = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
+        if data.len() < 4 + config_len {
+            return Err(format!(
+                "data too short for config: need {} bytes, have {}",
+                4 + config_len,
+                data.len()
+            ));
+        }
+
+        let config: RustEmbedderConfig = serde_json::from_slice(&data[4..4 + config_len])
+            .map_err(|e| format!("invalid config: {e}"))?;
+        if config.vocab_size <= 2 {
+            return Err("invalid config: vocab_size must be > 2".to_string());
+        }
+        if config.embedding_dim == 0 {
+            return Err("invalid config: embedding_dim must be > 0".to_string());
+        }
+        if config.max_seq_len == 0 {
+            return Err("invalid config: max_seq_len must be > 0".to_string());
+        }
+
+        let weight_data = &data[4 + config_len..];
+        let expected_len = config.vocab_size * config.embedding_dim;
+        let expected_bytes = expected_len * std::mem::size_of::<f32>();
+        if weight_data.len() != expected_bytes {
+            return Err(format!(
+                "invalid weights size: expected {} bytes, found {}",
+                expected_bytes,
+                weight_data.len()
+            ));
+        }
+
+        let mut token_embeddings = Vec::with_capacity(expected_len);
+        for chunk in weight_data.chunks_exact(4) {
+            token_embeddings.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+        }
+
+        Ok(Self {
+            config,
+            token_embeddings,
+        })
+    }
+
     pub fn save_dir(&self, out_dir: impl AsRef<Path>) -> Result<(), String> {
         let out_dir = out_dir.as_ref();
         fs::create_dir_all(out_dir)
@@ -457,5 +519,24 @@ mod tests {
         assert_eq!(before, after);
 
         let _ = fs::remove_dir_all(tmp);
+    }
+
+    #[test]
+    fn bytes_round_trip_preserves_embeddings() {
+        let config = RustEmbedderConfig {
+            vocab_size: 128,
+            embedding_dim: 16,
+            max_seq_len: 16,
+            normalize: true,
+        };
+        let model = RustContrastiveEmbedder::new(config, 19);
+        let text = "bytes round trip";
+        let before = model.embed(text);
+
+        let bytes = model.to_bytes().expect("to_bytes should succeed");
+        let loaded =
+            RustContrastiveEmbedder::from_bytes(&bytes).expect("from_bytes should succeed");
+        let after = loaded.embed(text);
+        assert_eq!(before, after);
     }
 }

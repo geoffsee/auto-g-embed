@@ -2,5 +2,9 @@ name = "embeddings-worker"
 main = "build/index.js"
 compatibility_date = "2026-02-09"
 
+[[kv_namespaces]]
+binding = "EMBEDDINGS_MODEL"
+id = "ee9c60dbebee47eb8f4d7456053bb50b"
+
 [build]
 command = "cargo install -q worker-build@^0.7 && worker-build --release"

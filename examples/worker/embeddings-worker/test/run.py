@@ -25,6 +25,25 @@ def cosine(a, b):
     return dot / (na * nb) if na and nb else 0.0
 
 
+def histogram(values, bins=10):
+    """Return a simple text histogram."""
+    lo, hi = min(values), max(values)
+    step = (hi - lo) / bins
+    if step == 0:
+        return f"  all values = {lo:.6f}"
+    counts = [0] * bins
+    for v in values:
+        idx = min(int((v - lo) / step), bins - 1)
+        counts[idx] += 1
+    max_count = max(counts)
+    lines = []
+    for i, c in enumerate(counts):
+        edge = lo + i * step
+        bar = "#" * int(30 * c / max_count) if max_count else ""
+        lines.append(f"      {edge:+.4f} | {bar} ({c})")
+    return "\n".join(lines)
+
+
 def inspect_embedding(vec, label=""):
     """Print detailed statistics about an embedding vector."""
     dim = len(vec)
@@ -38,17 +57,21 @@ def inspect_embedding(vec, label=""):
     if nonzero:
         l2 = math.sqrt(sum(v * v for v in vec))
         abs_vals = [abs(v) for v in nonzero]
-        print(f"    L2 norm={l2:.4f}  min|v|={min(abs_vals):.6f}  max|v|={max(abs_vals):.6f}  mean|v|={sum(abs_vals)/len(abs_vals):.6f}")
+        std = math.sqrt(sum((v - sum(vec)/dim)**2 for v in vec) / dim)
+        print(f"    L2 norm={l2:.4f}  std={std:.6f}")
+        print(f"    min={min(vec):.6f}  max={max(vec):.6f}  mean={sum(vec)/dim:.6f}")
 
         pos = sum(1 for v in nonzero if v > 0)
         neg = nz_count - pos
         print(f"    positive={pos}  negative={neg}")
 
-        # Show non-zero indices and values
-        active = [(i, v) for i, v in enumerate(vec) if v != 0.0]
-        entries = "  ".join(f"[{i}]={v:+.4f}" for i, v in active[:12])
-        suffix = f"  ... ({nz_count - 12} more)" if nz_count > 12 else ""
-        print(f"    values: {entries}{suffix}")
+        # First 8 values as a preview
+        preview = "  ".join(f"{v:+.4f}" for v in vec[:8])
+        print(f"    first 8: {preview} ...")
+
+        # Value distribution
+        print(f"    distribution:")
+        print(histogram(vec))
     else:
         print("    (all zeros)")
     print()
@@ -93,25 +116,19 @@ for d, text in zip(r["data"], texts):
     inspect_embedding(d["embedding"], label=f'[{d["index"]}] "{text}"')
 
 print("  Cosine similarity matrix:")
-header = "".join(f"{'['+str(i)+']':>8}" for i in range(len(vecs)))
-print(f"          {header}")
+print(f"          {'':>4}" + "".join(f"  [{i}]   " for i in range(len(vecs))))
 for i in range(len(vecs)):
     row = ""
     for j in range(len(vecs)):
         sim = cosine(vecs[i], vecs[j])
-        row += f"{sim:+8.4f}"
-    print(f"    [{i}]   {row}")
+        row += f"  {sim:+.4f}"
+    print(f"    [{i}]  {row}")
 print()
 
-# Check if any pair of different texts share active dimensions
-print("  Shared active dimensions:")
+# Pairwise L2 distances (more informative than shared dims for dense vectors)
+print("  Pairwise L2 distances:")
+short = ["cat/mat", "feline/rug", "stocks", "dog/ball"]
 for i in range(len(vecs)):
     for j in range(i + 1, len(vecs)):
-        active_i = {k for k, v in enumerate(vecs[i]) if v != 0.0}
-        active_j = {k for k, v in enumerate(vecs[j]) if v != 0.0}
-        shared = active_i & active_j
-        if shared:
-            details = ", ".join(f"[{k}]" for k in sorted(shared))
-            print(f"    [{i}]<->[{j}]  {len(shared)} shared: {details}")
-        else:
-            print(f"    [{i}]<->[{j}]  none (orthogonal)")
+        dist = math.sqrt(sum((a - b) ** 2 for a, b in zip(vecs[i], vecs[j])))
+        print(f"    {short[i]:>11} <-> {short[j]:<11}  L2={dist:.4f}")

@@ -1,6 +1,8 @@
-use auto_g_embed::transformer::{ScratchTransformerEmbedder, TransformerConfig};
+use auto_g_embed::rust_embedder::RustContrastiveEmbedder;
 use serde::{Deserialize, Serialize};
 use worker::*;
+
+const MODEL_KV_KEY: &str = "model-weights";
 
 // --- OpenAI-compatible request/response types ---
 
@@ -83,20 +85,30 @@ fn error_response(status: http::StatusCode, message: impl Into<String>) -> Resul
     )
 }
 
+async fn load_embedder(env: &Env) -> Result<RustContrastiveEmbedder> {
+    let kv = env.kv("EMBEDDINGS_MODEL")?;
+    let bytes = kv
+        .get(MODEL_KV_KEY)
+        .bytes()
+        .await?
+        .ok_or_else(|| Error::RustError(format!("KV key '{MODEL_KV_KEY}' not found")))?;
+    RustContrastiveEmbedder::from_bytes(&bytes).map_err(Error::RustError)
+}
+
 // --- Handler ---
 
 #[event(fetch)]
-async fn fetch(req: HttpRequest, _env: Env, _ctx: Context) -> Result<HttpResponse> {
+async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<HttpResponse> {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
 
     match (method, path.as_str()) {
-        (http::Method::POST, "/v1/embeddings") => handle_embeddings(req).await,
+        (http::Method::POST, "/v1/embeddings") => handle_embeddings(req, &env).await,
         _ => error_response(http::StatusCode::NOT_FOUND, "Not found"),
     }
 }
 
-async fn handle_embeddings(req: HttpRequest) -> Result<HttpResponse> {
+async fn handle_embeddings(req: HttpRequest, env: &Env) -> Result<HttpResponse> {
     let mut body = req.into_body();
     let mut body_bytes = Vec::new();
     while let Some(chunk) = futures_util::StreamExt::next(&mut body).await {
@@ -112,7 +124,15 @@ async fn handle_embeddings(req: HttpRequest) -> Result<HttpResponse> {
     let model_name = request.model;
     let texts = request.input.into_texts();
 
-    let embedder = ScratchTransformerEmbedder::new(TransformerConfig::default(), 42);
+    let embedder = match load_embedder(env).await {
+        Ok(e) => e,
+        Err(e) => {
+            return error_response(
+                http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("failed to load model: {e}"),
+            )
+        }
+    };
 
     let mut total_tokens = 0usize;
     let data: Vec<EmbeddingData> = texts
