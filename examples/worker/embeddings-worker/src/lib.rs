@@ -70,6 +70,7 @@ fn json_response(status: http::StatusCode, body: &impl Serialize) -> Result<Http
     Ok(http::Response::builder()
         .status(status)
         .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
         .body(Body::from_stream(stream)?)?)
 }
 
@@ -103,9 +104,20 @@ async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<HttpResponse
     let path = req.uri().path().to_string();
 
     match (method, path.as_str()) {
+        (http::Method::OPTIONS, "/v1/embeddings") => preflight_response(),
         (http::Method::POST, "/v1/embeddings") => handle_embeddings(req, &env).await,
         _ => error_response(http::StatusCode::NOT_FOUND, "Not found"),
     }
+}
+
+fn preflight_response() -> Result<HttpResponse> {
+    Ok(http::Response::builder()
+        .status(http::StatusCode::NO_CONTENT)
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        .header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        .header("Access-Control-Max-Age", "86400")
+        .body(Body::empty())?)
 }
 
 async fn handle_embeddings(req: HttpRequest, env: &Env) -> Result<HttpResponse> {
