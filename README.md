@@ -8,147 +8,102 @@ tags:
   - rust
 ---
 
-# auto-g-embed
+---
+language:
+- en
+- zh
+- multilingual
+license: apache-2.0
+library_name: onnxruntime
+tags:
+- onnx
+- fp16
+- embeddings
+- sentence-similarity
+- feature-extraction
+- text-embedding
+- retrieval
+pipeline_tag: sentence-similarity
+base_model: Octen/Octen-Embedding-0.6B
+---
 
-Local semantic embedding pipeline with a Rust-native runtime.
+# auto-g-embed-Octen-0.6B — ONNX
 
-## What this repo provides
+FP16 ONNX re-export of [Octen/Octen-Embedding-0.6B](https://huggingface.co/Octen/Octen-Embedding-0.6B) using only standard ONNX operators (opset 18). Compatible with any ONNX Runtime backend including CoreML, CUDA, DirectML, and CPU.
 
-- Contrastive dataset preparation (`prepare_contrastive`)
-- Rust-native embedder training (`train_rust_embedder`)
-- Runtime embedding APIs and examples
-- Optional ONNX/SentenceTransformer path in `training/`
-- SentenceTransformer publish tooling for Hugging Face (`training/publish_sentence_transformer.py`)
+## Why this export?
 
-## Quick start
+The original ONNX export uses `MatMulBnb4` (bitsandbytes INT4) operators from the `com.microsoft` domain. These are not supported by most execution providers (CoreML, TensorRT, etc.) and limit the model to CPU-only inference in practice.
 
-```bash
-cargo test
+This re-export replaces all non-standard ops with standard ONNX `MatMul` in float16, enabling hardware-accelerated inference across all major platforms.
 
-./training/run_pipeline.sh \
-  --profile kaggle_questions_million \
-  --source-csv data/kaggle/one-million-reddit-questions.csv
+## Differences from the original
+
+| | Original (INT4) | This export (FP16) |
+|---|---|---|
+| **Precision** | 4-bit (bitsandbytes) | float16 |
+| **Weight size** | 533 MB | 1.1 GB |
+| **ONNX ops** | `com.microsoft.MatMulBnb4` | Standard `MatMul` only |
+| **CoreML EP** | Not supported | Supported |
+| **CUDA EP** | Limited | Supported |
+| **Batch perf** | Baseline | ~11-19x faster |
+| **Single perf** | Baseline | ~1.2-1.4x faster |
+
+## Files
+
+- `model.fp16.onnx` — ONNX graph (5.3 MB)
+- `model.fp16.onnx.data` — External weights (1.1 GB)
+- `tokenizer.json` — HuggingFace BPE tokenizer (11 MB)
+
+## Usage
+
+### Python (ONNX Runtime)
+
+```python
+import onnxruntime as ort
+from tokenizers import Tokenizer
+import numpy as np
+
+tokenizer = Tokenizer.from_file("tokenizer.json")
+session = ort.InferenceSession("model.fp16.onnx")
+
+encoding = tokenizer.encode("hello world", add_special_tokens=True)
+input_ids = np.array([encoding.ids], dtype=np.int64)
+attention_mask = np.array([encoding.attention_mask], dtype=np.int64)
+
+embeddings = session.run(None, {
+    "input_ids": input_ids,
+    "attention_mask": attention_mask,
+})[0]
+
+print(f"Shape: {embeddings.shape}")  # (1, 1024)
 ```
 
-Run the Rust embedding example:
+### Rust (ort)
 
-```bash
-cargo run --example rust_embed -- \
-  artifacts/model/rust-embedder \
-  "A quick test sentence for semantic embeddings."
+```rust
+use int4_runner::EmbeddingModel;
+
+let tok = std::fs::read("tokenizer.json").unwrap();
+let model = EmbeddingModel::from_file("model.fp16.onnx", &tok).unwrap();
+let embedding = model.embed("hello world").unwrap();
+println!("dimensions: {}", embedding.values.len()); // 1024
 ```
 
-## Model artifacts
+## Model details
 
-Published model artifacts are available on Hugging Face:
+- **Architecture**: Qwen3 transformer, 28 layers, 1024 hidden dim, 16 attention heads
+- **Max sequence length**: 32,768 tokens (model supports), 512 tokens (typical usage)
+- **Output dimension**: 1024
+- **Tokenizer**: Qwen BPE (vocab size 151,669)
+- **Pooling**: Mean pooling + L2 normalization
 
-- https://huggingface.co/geoffsee/auto-g-embed
+## Attribution
 
-To publish a SentenceTransformer-formatted repo for direct MTEB/SBERT loading:
+- Original model: [Octen/Octen-Embedding-0.6B](https://huggingface.co/Octen/Octen-Embedding-0.6B) by [Octen](https://octen.ai/)
+- Base model: [Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
+- License: Apache-2.0
 
-```bash
-./training/run_pipeline.sh \
-  --train-backend python \
-  --publish-hf \
-  --hf-repo-id your-user/auto-g-embed-st
-```
+## Changes from original
 
-## Project layout
-
-- `src/`: library modules and binaries
-- `examples/`: runnable embedding demos
-- `tests/`: integration/performance tests
-- `training/`: pipeline scripts and dataset adapters
-
-## Development checks
-
-```bash
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-```
-
-## Community Benchmark
-
-Run the reproducible benchmark CLI:
-
-```bash
-cargo run --release --bin community_benchmark -- \
-  --output artifacts/benchmarks/latest.json
-```
-
-The output includes throughput, latency percentiles (`p50/p95/p99`), retrieval quality metrics, and environment metadata for publishing.
-Methodology and reporting guidance: `BENCHMARKS.md`.
-
-Latest Benchmark (M4 Max) (February 8, 2026):
-
-```bash
-cargo run --release --bin community_benchmark -- \
-  --eval-count 500 --warmup-count 100 --query-count 32 \
-  --output artifacts/benchmarks/smoke.json
-```
-
-- `embeds_per_second`: `219595.18`
-- `p50_us`: `3.88`
-- `p95_us`: `6.54`
-- `p99_us`: `6.71`
-- `top1_accuracy`: `0.9375`
-- `separation`: `0.2886`
-
-### Comparison Chart
-
-| Model | embeds_per_second | p50_us | p95_us | p99_us | top1_accuracy | separation |
-|---|---:|---:|---:|---:|---:|---:|
-| auto-g-embed (local smoke run) | 219595.18 | 3.88 | 6.54 | 6.71 | 0.9375 | 0.2886 |
-| Llama-3.2-NV-EmbedQA-1B-v2 | 140.7 | 7000 | 8000 | N/R | N/R | N/R |
-| Llama-3.2-NeMo-Retriever-300M-Embed-V1 | 126.0 | 8000 | 8300 | N/R | N/R | N/R |
-| NV-EmbedQA-E5-v5 | 196.3 | 5100 | 5400 | N/R | N/R | N/R |
-| NV-EmbedQA-Mistral7B-v2 | 67.9 | 14600 | 15400 | N/R | N/R | N/R |
-| SwiftEmbed (paper) | 50000 | 1120 | N/R | N/R | N/R | N/R |
-
-Notes:
-
-- `N/R` means not reported in the source.
-- External numbers are from different hardware and workloads, so this is directional and not an apples-to-apples benchmark.
-- Source links:
-  - NVIDIA NIM performance tables: https://docs.nvidia.com/nim/nemo-retriever/text-embedding/latest/performance.html
-  - SwiftEmbed paper: https://arxiv.org/abs/2510.24793
-
-## MTEB Results
-
-Latest MTEB run (Hugging Face Job, `cpu-upgrade`) (February 8, 2026):
-
-```bash
-hf jobs uv run --with mteb --with sentence-transformers --with torch --with numpy \
-  --flavor cpu-upgrade --timeout 6h --detach scripts/run_real_eval.py \
-  --model geoffsee/auto-g-embed-st --device cpu \
-  --tasks SciFact,NFCorpus,FiQA2018 --batch-size 64 --skip-perf \
-  --mteb-output-dir artifacts/evals/mteb_real --output-json latest.json
-```
-
-- Job: https://huggingface.co/jobs/geoffsee/698915cab6db0e80325e19e8
-- `SciFact` main score: `0.64872`
-- `NFCorpus` main score: `0.31141`
-- `FiQA2018` main score: `0.36869`
-- `avg_main_score` (3-task mean): `0.44294`
-
-### MTEB Comparison Chart
-
-| Run | Runtime | SciFact | NFCorpus | FiQA2018 | avg_main_score |
-|---|---|---:|---:|---:|---:|
-| auto-g-embed (local eval, M4 Max) | `mps` | 0.64872 | 0.31141 | 0.36869 | 0.44294 |
-| auto-g-embed-st (Hugging Face Job) | `cpu` (`cpu-upgrade`) | 0.64872 | 0.31141 | 0.36869 | 0.44294 |
-| sentence-transformers/all-MiniLM-L6-v2 | `cpu/mps` | 0.64508 | 0.31594 | 0.36867 | 0.44323 |
-| BAAI/bge-small-en-v1.5 | `cpu/mps` | 0.71273 | 0.34264 | 0.40343 | 0.48627 |
-| intfloat/e5-small-v2 | `cpu/mps` | 0.68854 | 0.32449 | 0.37434 | 0.46246 |
-
-Notes:
-
-- Local values are from `artifacts/evals/real_eval/latest.json`.
-- HF job used the published model repo `geoffsee/auto-g-embed-st` with the same task set and batch size.
-- Comparable model values are from `mteb/results` on Hugging Face (dataset commit `5a7430bdc3c58b3c8be7e8eed4c7bb990f7d554c`), using each task file's `scores.test[0].main_score`.
-
-## Additional docs
-
-- Training and pipeline details: `training/README.md`
-- Test data notes: `test-data/README.md`
+This is a precision-format conversion only. The model weights were cast from bfloat16 to float16 and re-exported using `torch.onnx.export` (opset 18) with mean pooling and L2 normalization baked into the graph. No fine-tuning or weight modification was performed.
